@@ -85,7 +85,9 @@ Frontend: `cd frontend && bun install`
 ## Customization Guide
 
 ### Changing Default Parameters
-The WebSocket connection URL passes parameters to Deepgram. Find where the Deepgram WebSocket URL is constructed in the backend and modify defaults:
+The browser passes parameters to this starter's WebSocket endpoint. The backend
+maps them to SDK connection options in `buildDeepgramOptions()`; modify that
+function to change the defaults sent to Deepgram:
 
 | Parameter | Default | Options | Effect |
 |-----------|---------|---------|--------|
@@ -97,7 +99,9 @@ The WebSocket connection URL passes parameters to Deepgram. Find where the Deepg
 | `channels` | `1` | `1`, `2` | Mono or stereo |
 
 ### Adding More Deepgram Features via Query Params
-These can be appended to the Deepgram WebSocket URL as query parameters:
+Add browser query parameters to this starter's WebSocket URL, then explicitly
+map each supported option in `buildDeepgramOptions()`. The SDK turns those
+options into the Deepgram connection query string:
 
 | Feature | Parameter | Example | Effect |
 |---------|-----------|---------|--------|
@@ -110,7 +114,9 @@ These can be appended to the Deepgram WebSocket URL as query parameters:
 | Keywords | `keywords` | `deepgram:2` | Boost keyword with weight |
 | No delay | `no_delay` | `true` | Minimize latency (may reduce accuracy) |
 
-**Backend:** Append params to the Deepgram URL in the WebSocket proxy handler.
+**Backend:** Add typed options to `buildDeepgramOptions()`. For an API option
+not yet modeled by the SDK, add it through the connection's `queryParams`
+escape hatch rather than constructing an upstream URL yourself.
 
 **Frontend:** The frontend sends these as query params when opening the WebSocket. To add a UI control for a new param, edit `frontend/main.js` — add an input/checkbox and include it in the `URLSearchParams` when connecting.
 
@@ -143,6 +149,7 @@ The frontend is a git submodule from `deepgram-starters/live-transcription-html`
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
 | `DEEPGRAM_API_KEY` | Yes | — | Deepgram API key |
+| `DEEPGRAM_BASE_URL` | No | production endpoint | WebSocket endpoint override for non-production STT environments, such as `wss://api.staging.deepgram.com` |
 | `PORT` | No | `8081` | Backend server port |
 | `HOST` | No | `0.0.0.0` | Backend bind address |
 | `SESSION_SECRET` | No | — | JWT signing secret (production) |

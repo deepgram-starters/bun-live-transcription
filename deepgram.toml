@@ -6,7 +6,7 @@ repository = "https://github.com/deepgram-starters/bun-live-transcription"
 useCase = "live-transcription"
 language = "typescript"
 framework = "bun"
-sdk = "N/A"
+sdk = "@deepgram/sdk"
 tags = ["live-transcription", "live-stt", "real-time-transcription", "real-time-asr", "streaming-transcription", "live-speech-to-text", "typescript", "bun"]
 
 [check]
