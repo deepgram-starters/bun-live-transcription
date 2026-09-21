@@ -37,3 +37,55 @@ test("caps frames buffered before the transcription socket opens", async () => {
     await new Promise<void>((resolve) => upstream.close(() => resolve()));
   }
 });
+
+test("forwards interim-results defaults to Deepgram", async () => {
+  const upstreamUrls: URL[] = [];
+  const upstream = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch(request, server) {
+      upstreamUrls.push(new URL(request.url));
+      if (server.upgrade(request)) return;
+      return new Response("Expected WebSocket upgrade", { status: 400 });
+    },
+    websocket: {
+      open() {},
+    },
+  });
+  const upstreamPort = upstream.port;
+  const port = 18305;
+  const app = Bun.spawn(["bun", "server.ts"], {
+    cwd: appRoot,
+    env: { ...process.env, DEEPGRAM_API_KEY: "test-key", DEEPGRAM_BASE_URL: `ws://127.0.0.1:${upstreamPort}`, PORT: String(port) },
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+
+  try {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      try { if ((await fetch(`http://127.0.0.1:${port}/health`)).ok) break; } catch {}
+      await Bun.sleep(50);
+    }
+    const session = await (await fetch(`http://127.0.0.1:${port}/api/session`)).json() as { token: string };
+
+    const connect = async (query: string, requestCount: number) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/api/live-transcription${query}`, [`access_token.${session.token}`]);
+      try {
+        for (let attempt = 0; attempt < 50; attempt += 1) {
+          if (upstreamUrls.length >= requestCount) return upstreamUrls[requestCount - 1]!;
+          await Bun.sleep(50);
+        }
+        throw new Error("Deepgram connection was not opened");
+      } finally {
+        socket.close();
+      }
+    };
+
+    expect((await connect("", 1)).searchParams.get("interim_results")).toBe("true");
+    expect((await connect("?interim_results=false", 2)).searchParams.get("interim_results")).toBe("false");
+  } finally {
+    app.kill();
+    await app.exited;
+    upstream.stop(true);
+  }
+});
