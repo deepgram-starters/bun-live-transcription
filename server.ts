@@ -155,6 +155,7 @@ function buildDeepgramOptions(
     sample_rate: queryParams.get("sample_rate") || "16000",
     channels: queryParams.get("channels") || "1",
     smart_format: queryParams.get("smart_format") || "true",
+    interim_results: queryParams.get("interim_results") || "true",
   };
 
   // Optional parameters - only set if explicitly provided by client
