@@ -81,8 +81,51 @@ test("forwards interim-results defaults to Deepgram", async () => {
       }
     };
 
-    expect((await connect("", 1)).searchParams.get("interim_results")).toBe("true");
+    expect((await connect("", 1)).searchParams.get("interim_results")).toBe("false");
     expect((await connect("?interim_results=false", 2)).searchParams.get("interim_results")).toBe("false");
+  } finally {
+    app.kill();
+    await app.exited;
+    upstream.stop(true);
+  }
+});
+
+test("reports a rejected Deepgram connection before closing the browser socket", async () => {
+  const upstream = Bun.serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    fetch() {
+      return new Response("Unauthorized", { status: 401 });
+    },
+  });
+  const port = 18306;
+  const app = Bun.spawn(["bun", "server.ts"], {
+    cwd: appRoot,
+    env: { ...process.env, DEEPGRAM_API_KEY: "test-key", DEEPGRAM_BASE_URL: `ws://127.0.0.1:${upstream.port}`, PORT: String(port) },
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+
+  try {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      try { if ((await fetch(`http://127.0.0.1:${port}/health`)).ok) break; } catch {}
+      await Bun.sleep(50);
+    }
+    const session = await (await fetch(`http://127.0.0.1:${port}/api/session`)).json() as { token: string };
+    const errorFrame = await new Promise<any>((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${port}/api/live-transcription`, [`access_token.${session.token}`]);
+      const timeout = setTimeout(() => reject(new Error("connection failure was not reported")), 5_000);
+      socket.addEventListener("message", (event) => {
+        clearTimeout(timeout);
+        resolve(JSON.parse(event.data));
+      });
+      socket.addEventListener("error", () => reject(new Error("browser socket failed")));
+    });
+    expect(errorFrame).toEqual({
+      type: "Error",
+      code: "CONNECTION_FAILED",
+      description: "Deepgram rejected the connection",
+    });
   } finally {
     app.kill();
     await app.exited;
