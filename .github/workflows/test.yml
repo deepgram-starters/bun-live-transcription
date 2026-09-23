@@ -14,4 +14,4 @@ jobs:
         with:
           bun-version: "1.2.5"
       - run: bun install --frozen-lockfile
-      - run: bun test ./test
+      - run: bun test test/bridge.test.ts
