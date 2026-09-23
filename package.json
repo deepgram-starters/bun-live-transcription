@@ -7,7 +7,7 @@
   "scripts": {
     "start": "bun run server.ts",
     "dev": "bun --watch run server.ts",
-    "test": "bun test ./test"
+    "test": "bun test test/"
   },
   "repository": {
     "type": "git",

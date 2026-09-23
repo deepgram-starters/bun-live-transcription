@@ -97,6 +97,7 @@ function to change the defaults sent to Deepgram:
 | `encoding` | `linear16` | `linear16`, `opus`, `flac` | Audio encoding |
 | `sample_rate` | `16000` | `8000`, `16000`, `44100`, `48000` | Audio sample rate |
 | `channels` | `1` | `1`, `2` | Mono or stereo |
+| `interim_results` | `false` | `true`/`false` | Send partial transcripts when explicitly enabled |
 
 ### Adding More Deepgram Features via Query Params
 Add browser query parameters to this starter's WebSocket URL, then explicitly
@@ -105,7 +106,6 @@ options into the Deepgram connection query string:
 
 | Feature | Parameter | Example | Effect |
 |---------|-----------|---------|--------|
-| Interim results | `interim_results` | `true` | Show partial transcripts while speaking |
 | Endpointing | `endpointing` | `300` | Silence duration (ms) before finalization |
 | Utterance end | `utterance_end_ms` | `1000` | Detect end of utterance |
 | VAD events | `vad_events` | `true` | Voice activity detection events |
@@ -168,7 +168,10 @@ chore(deps): update frontend submodule
 ## Testing
 
 ```bash
-# Run conformance tests (requires app to be running)
+# Run unit tests without credentials
+make test-unit
+
+# Run unit and conformance tests (requires an API key and running app for conformance)
 make test
 
 # Manual endpoint check
