@@ -296,7 +296,14 @@ function failDeepgramConnection(
   if (ws.data.connectionFailed) return;
   ws.data.connectionFailed = true;
   try {
-    ws.send(JSON.stringify({ type: "Error", code: "CONNECTION_FAILED", description }));
+    ws.send(JSON.stringify({
+      type: "Error",
+      error: {
+        type: "connection",
+        code: "CONNECTION_FAILED",
+        message: description,
+      },
+    }));
     ws.close(1011, "Deepgram connection failed");
   } catch {
     // Client may already be closed.

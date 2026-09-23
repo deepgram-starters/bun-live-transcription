@@ -123,19 +123,39 @@ test("reports a rejected Deepgram connection before closing the browser socket",
 
   try {
     const session = await (await fetch(`http://127.0.0.1:${port}/api/session`)).json() as { token: string };
-    const errorFrame = await new Promise<any>((resolve, reject) => {
+    const { errorFrame, closeCode } = await new Promise<{ errorFrame: unknown; closeCode: number }>((resolve, reject) => {
       const socket = new WebSocket(`ws://127.0.0.1:${port}/api/live-transcription`, [`access_token.${session.token}`]);
       const timeout = setTimeout(() => reject(new Error("connection failure was not reported")), STARTUP_TIMEOUT);
+      let errorFrame: unknown;
       socket.addEventListener("message", (event) => {
-        clearTimeout(timeout);
-        resolve(JSON.parse(event.data));
+        try {
+          errorFrame = JSON.parse(event.data);
+        } catch (error) {
+          clearTimeout(timeout);
+          reject(error);
+        }
       });
-      socket.addEventListener("error", () => reject(new Error("browser socket failed")));
+      socket.addEventListener("close", (event) => {
+        clearTimeout(timeout);
+        if (errorFrame === undefined) {
+          reject(new Error("connection failure closed before reporting an error frame"));
+          return;
+        }
+        resolve({ errorFrame, closeCode: event.code });
+      });
+      socket.addEventListener("error", () => {
+        clearTimeout(timeout);
+        reject(new Error("browser socket failed"));
+      });
     });
+    expect(closeCode).toBe(1011);
     expect(errorFrame).toEqual({
       type: "Error",
-      code: "CONNECTION_FAILED",
-      description: "Deepgram rejected the connection",
+      error: {
+        type: "connection",
+        code: "CONNECTION_FAILED",
+        message: "Deepgram rejected the connection",
+      },
     });
   } finally {
     await stopApp(app);
