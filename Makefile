@@ -105,7 +105,7 @@ test: test-unit test-contract
 
 test-unit:
 	@echo "==> Running Bun unit tests..."
-	bun test ./test
+	bun test test/
 
 test-contract:
 	@if [ ! -f ".env" ]; then \
