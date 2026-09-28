@@ -155,6 +155,7 @@ function buildDeepgramOptions(
     sample_rate: queryParams.get("sample_rate") || "16000",
     channels: queryParams.get("channels") || "1",
     smart_format: queryParams.get("smart_format") || "true",
+    interim_results: queryParams.get("interim_results") || "false",
   };
 
   // Optional parameters - only set if explicitly provided by client
@@ -285,6 +286,28 @@ interface WsData {
   pending: Array<{ binary: true; data: any } | { binary: false; msg: any }>;
   pendingBytes: number;
   pendingOverflowed: boolean;
+  connectionFailed: boolean;
+}
+
+function failDeepgramConnection(
+  ws: import("bun").ServerWebSocket<WsData>,
+  description: string
+): void {
+  if (ws.data.connectionFailed) return;
+  ws.data.connectionFailed = true;
+  try {
+    ws.send(JSON.stringify({
+      type: "Error",
+      error: {
+        type: "connection",
+        code: "CONNECTION_FAILED",
+        message: description,
+      },
+    }));
+    ws.close(1011, "Deepgram connection failed");
+  } catch {
+    // Client may already be closed.
+  }
 }
 
 function queuePending(
@@ -366,6 +389,7 @@ const server = Bun.serve<WsData>({
           pending: [],
           pendingBytes: 0,
           pendingOverflowed: false,
+          connectionFailed: false,
         },
         headers: {
           "Sec-WebSocket-Protocol": validProto,
@@ -416,11 +440,7 @@ const server = Bun.serve<WsData>({
         dgConn = await deepgram.listen.v1.createConnection(options as any);
       } catch (error) {
         console.error("Failed to create Deepgram connection:", error);
-        try {
-          ws.close(1011, "Failed to reach Deepgram");
-        } catch {
-          // Client may already be closed
-        }
+        failDeepgramConnection(ws, "Failed to reach Deepgram");
         activeConnections.delete(ws);
         return;
       }
@@ -451,15 +471,19 @@ const server = Bun.serve<WsData>({
 
       dgConn.on("error", (error: any) => {
         console.error("Deepgram socket error:", error);
-        try {
-          ws.close(1011, "Deepgram connection error");
-        } catch {
-          // Client may already be closed
+        if (!ws.data.dgReady) {
+          failDeepgramConnection(ws, "Deepgram rejected the connection");
+          return;
         }
+        try { ws.close(1011, "Deepgram connection error"); } catch {}
       });
 
       dgConn.on("close", (event: { code?: number; reason?: string }) => {
         console.log(`Deepgram connection closed: ${event?.code ?? 1000} ${event?.reason ?? ""}`);
+        if (!ws.data.dgReady) {
+          failDeepgramConnection(ws, "Deepgram rejected the connection");
+          return;
+        }
         try {
           ws.close(getSafeCloseCode(event?.code), event?.reason || undefined);
         } catch {
@@ -489,11 +513,7 @@ const server = Bun.serve<WsData>({
         console.error("Deepgram connection did not open:", error);
         ws.data.pending = [];
         ws.data.pendingBytes = 0;
-        try {
-          ws.close(1011, "Deepgram connection failed to open");
-        } catch {
-          // Client may already be closed
-        }
+        failDeepgramConnection(ws, "Deepgram rejected the connection");
       }
     },
 
